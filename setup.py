@@ -1,0 +1,38 @@
+import os
+from setuptools import setup, find_packages
+
+here = os.path.abspath(os.path.dirname(__file__))
+
+with open(os.path.join(here, 'README.rst')) as f:
+    README = f.read()
+
+requires = [
+    'setuptools',
+    'CouchDB',
+    'jsonpatch',
+    'pytz',
+    'gevent',
+]
+
+entry_points = """\
+"""
+
+setup(name='openprocurement.concord',
+      version='0.1',
+      description="Conflict resolution daemon",
+      long_description=README,
+      classifiers=[
+          "License :: OSI Approved :: Apache Software License",
+          "Programming Language :: Python",
+      ],
+      keywords="couchdb conflict resolution daemon",
+      author='Quintagroup, Ltd.',
+      author_email='info@quintagroup.com',
+      license='Apache License 2.0',
+      url='https://github.com/openprocurement/openprocurement.concord',
+      packages=find_packages(exclude=['ez_setup']),
+      namespace_packages=['openprocurement'],
+      include_package_data=True,
+      zip_safe=False,
+      install_requires=requires,
+      entry_points=entry_points)
