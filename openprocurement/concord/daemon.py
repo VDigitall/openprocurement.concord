@@ -27,12 +27,28 @@ def get_revision_changes(dst, src):
     return make_patch(dst, src).patch
 
 
+def update_journal_handler_params(params):
+    if not JournalHandler:
+        return
+    for i in LOGGER.handlers:
+        if isinstance(i, JournalHandler):
+            for x, j in params.items():
+                i._extra[x.upper()] = j
+
+
 def conflicts_resolve(db, c):
     """ Conflict resolution algorithm """
     ctender = c[u'doc']
     tid = c[u'id']
     trev = ctender[u'_rev']
     conflicts = ctender[u'_conflicts']
+    update_journal_handler_params({
+        'TENDER_ID': tid,
+        'TENDERID': ctender.get(u'tenderID', ''),
+        'TENDER_REV': trev,
+        'RESULT': trev,
+        'PARAMS': ','.join(conflicts),
+    })
     open_revs = dict([(i, None) for i in conflicts])
     open_revs[trev] = sorted(set([i.get('rev') for i in ctender['revisions']]))
     td = {trev: ctender}
@@ -81,6 +97,7 @@ def conflicts_resolve(db, c):
             LOGGER.info("Conflict not resolved", extra={'tenderid': tid, 'rev': trev, 'MESSAGE_ID': 'conflict_not_resolved'})
             return
         else:
+            update_journal_handler_params({'RESULT': rev})
             LOGGER.info("Conflict resolved", extra={'tenderid': tid, 'rev': rev, 'MESSAGE_ID': 'conflict_resolved'})
     else:
         LOGGER.info("Conflict resolved w/o changes", extra={'tenderid': tid, 'rev': trev, 'MESSAGE_ID': 'conflict_resolved_wo_changes'})
