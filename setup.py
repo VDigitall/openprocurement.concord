@@ -13,6 +13,11 @@ requires = [
     'pytz',
     'gevent',
 ]
+test_requires = requires + [
+    'webtest',
+    'python-coveralls',
+    'openprocurement.api',
+]
 
 entry_points = """\
 """
@@ -35,4 +40,7 @@ setup(name='openprocurement.concord',
       include_package_data=True,
       zip_safe=False,
       install_requires=requires,
+      tests_require=test_requires,
+      extras_require={'test': test_requires},
+      test_suite="openprocurement.concord.tests.main.suite",
       entry_points=entry_points)
