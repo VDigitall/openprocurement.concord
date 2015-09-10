@@ -38,6 +38,7 @@ def update_journal_handler_params(params):
 
 def conflicts_resolve(db, c):
     """ Conflict resolution algorithm """
+    changed = False
     ctender = c[u'doc']
     tid = c[u'id']
     trev = ctender[u'_rev']
@@ -50,44 +51,44 @@ def conflicts_resolve(db, c):
         'PARAMS': ','.join(conflicts),
     })
     LOGGER.info("Conflict detected", extra={'tenderid': tid, 'rev': trev, 'MESSAGE_ID': 'conflict_detected'})
-    open_revs = dict([(i, None) for i in conflicts])
-    open_revs[trev] = sorted(set([i.get('rev') for i in ctender['revisions']]))
-    td = {trev: ctender}
-    for r in conflicts:
-        try:
-            t = db.get(tid, rev=r)
-        except couchdb.http.ServerError:
-            return
-        open_revs[r] = sorted(set([i.get('rev') for i in t['revisions']]))
-        if r not in td:
-            td[r] = t.copy()
-    common_rev = [i[0] for i in zip(*open_revs.values()) if all(map(lambda x: i[0]==x, i))][-1]
-    common_index = [i.get('rev') for i in ctender['revisions']].index(common_rev)
-    applied = [rev['date'] for rev in ctender['revisions'][common_index:]]
-    changed = False
-    for r in conflicts:
-        tt = []
-        t = td[r]
-        revs = t['revisions']
-        common_index = [i.get('rev') for i in revs].index(common_rev)
-        for rev in revs[common_index:][::-1]:
-            tn = t.copy()
-            t = _apply_patch(t, rev['changes'])
-            ti = dict([x for x in t.items() if x[0] not in IGNORE])
-            tj = dict([x for x in tn.items() if x[0] not in IGNORE])
-            tt.append((rev['date'], rev, get_revision_changes(ti, tj)))
-        for i in tt[::-1]:
-            if i[0] in applied:
-                continue
-            t = ctender.copy()
-            ctender.update(_apply_patch(t, i[2]))
-            patch = get_revision_changes(ctender, t)
-            revision = i[1]
-            revision['changes'] = patch
-            revision['rev'] = common_rev
-            ctender['revisions'].append(revision)
-            applied.append(i[0])
-            changed = True
+    if 'revisions' in ctender:
+        open_revs = dict([(i, None) for i in conflicts])
+        open_revs[trev] = sorted(set([i.get('rev') for i in ctender['revisions']]))
+        td = {trev: ctender}
+        for r in conflicts:
+            try:
+                t = db.get(tid, rev=r)
+            except couchdb.http.ServerError:
+                return
+            open_revs[r] = sorted(set([i.get('rev') for i in t['revisions']]))
+            if r not in td:
+                td[r] = t.copy()
+        common_rev = [i[0] for i in zip(*open_revs.values()) if all(map(lambda x: i[0]==x, i))][-1]
+        common_index = [i.get('rev') for i in ctender['revisions']].index(common_rev)
+        applied = [rev['date'] for rev in ctender['revisions'][common_index:]]
+        for r in conflicts:
+            tt = []
+            t = td[r]
+            revs = t['revisions']
+            common_index = [i.get('rev') for i in revs].index(common_rev)
+            for rev in revs[common_index:][::-1]:
+                tn = t.copy()
+                t = _apply_patch(t, rev['changes'])
+                ti = dict([x for x in t.items() if x[0] not in IGNORE])
+                tj = dict([x for x in tn.items() if x[0] not in IGNORE])
+                tt.append((rev['date'], rev, get_revision_changes(ti, tj)))
+            for i in tt[::-1]:
+                if i[0] in applied:
+                    continue
+                t = ctender.copy()
+                ctender.update(_apply_patch(t, i[2]))
+                patch = get_revision_changes(ctender, t)
+                revision = i[1]
+                revision['changes'] = patch
+                revision['rev'] = common_rev
+                ctender['revisions'].append(revision)
+                applied.append(i[0])
+                changed = True
     if changed:
         ctender['dateModified'] = get_now().isoformat()
         try:

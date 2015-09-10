@@ -40,6 +40,17 @@ class TenderConflictsTest(BaseTenderWebTest):
             }})
             self.assertEqual(response.status, '200 OK')
 
+    def test_conflict_tenderID(self):
+        self.db2.save({'_id': 'tenderID'})
+        self.couchdb_server.replicate(self.db.name, self.db2.name)
+        self.couchdb_server.replicate(self.db2.name, self.db.name)
+        self.assertGreater(len(self.db.view('conflicts/all')), 0)
+        conflicts_resolve(self.db)
+        self.assertEqual(len(self.db.view('conflicts/all')), 0)
+        self.couchdb_server.replicate(self.db.name, self.db2.name)
+        self.couchdb_server.replicate(self.db2.name, self.db.name)
+        self.assertEqual(len(self.db.view('conflicts/all')), 0)
+
     def test_conflict_simple(self):
         self.couchdb_server.replicate(self.db.name, self.db2.name)
         self.couchdb_server.replicate(self.db2.name, self.db.name)
