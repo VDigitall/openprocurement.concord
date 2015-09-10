@@ -49,6 +49,7 @@ def conflicts_resolve(db, c):
         'RESULT': trev,
         'PARAMS': ','.join(conflicts),
     })
+    LOGGER.info("Conflict detected", extra={'tenderid': tid, 'rev': trev, 'MESSAGE_ID': 'conflict_detected'})
     open_revs = dict([(i, None) for i in conflicts])
     open_revs[trev] = sorted(set([i.get('rev') for i in ctender['revisions']]))
     td = {trev: ctender}
@@ -90,24 +91,27 @@ def conflicts_resolve(db, c):
     if changed:
         ctender['dateModified'] = get_now().isoformat()
         try:
-            tid, rev = db.save(ctender)
+            tid, trev = db.save(ctender)
         except couchdb.http.ServerError:
             return
         except couchdb.http.ResourceConflict:
             LOGGER.info("Conflict not resolved", extra={'tenderid': tid, 'rev': trev, 'MESSAGE_ID': 'conflict_not_resolved'})
             return
         else:
-            update_journal_handler_params({'RESULT': rev})
-            LOGGER.info("Conflict resolved", extra={'tenderid': tid, 'rev': rev, 'MESSAGE_ID': 'conflict_resolved'})
+            update_journal_handler_params({'RESULT': trev})
+            LOGGER.info("Conflict resolved", extra={'tenderid': tid, 'rev': trev, 'MESSAGE_ID': 'conflict_resolved'})
     else:
         LOGGER.info("Conflict resolved w/o changes", extra={'tenderid': tid, 'rev': trev, 'MESSAGE_ID': 'conflict_resolved_wo_changes'})
     uu=[]
     for r in conflicts:
         uu.append({'_id': tid, '_rev': r, '_deleted': True})
     try:
-        db.update(uu)
+        results = db.update(uu)
     except couchdb.http.ServerError:
         return
+    else:
+        update_journal_handler_params({'TENDER_REV': trev, 'RESULT': ','.join([str(x[0]) for x in results])})
+        LOGGER.info("Deleting conflicts", extra={'tenderid': tid, 'rev': trev, 'MESSAGE_ID': 'conflict_deleting'})
 
 
 def main(couchdb_url=None, couchdb_db='openprocurement', seq_file=None):
