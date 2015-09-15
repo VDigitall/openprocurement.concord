@@ -1,11 +1,12 @@
 import gevent.monkey
 gevent.monkey.patch_all()
 
-import os, logging, couchdb
+import os, logging, couchdb, json
 from couchdb import Server, Session
 from datetime import timedelta, datetime
 from jsonpatch import make_patch, apply_patch as _apply_patch
 from pytz import timezone
+#from gevent import spawn, wait
 
 try:
     from systemd.journal import JournalHandler
@@ -36,13 +37,16 @@ def update_journal_handler_params(params):
                 i._extra[x.upper()] = j
 
 
-def conflicts_resolve(db, c):
+def conflicts_resolve(db, c, dump_dir=None):
     """ Conflict resolution algorithm """
     changed = False
     ctender = c[u'doc']
     tid = c[u'id']
     trev = ctender[u'_rev']
     conflicts = ctender[u'_conflicts']
+    if dump_dir:
+        with open('{}@{}_conflicts.json'.format(os.path.join(dump_dir, tid), trev), 'w') as f:
+            json.dump(ctender, f)
     update_journal_handler_params({
         'TENDER_ID': tid,
         'TENDERID': ctender.get(u'tenderID', ''),
@@ -60,6 +64,9 @@ def conflicts_resolve(db, c):
                 t = db.get(tid, rev=r)
             except couchdb.http.ServerError:
                 return
+            if dump_dir:
+                with open('{}@{}.json'.format(os.path.join(dump_dir, tid), r), 'w') as f:
+                    json.dump(t, f)
             open_revs[r] = sorted(set([i.get('rev') for i in t['revisions']]))
             if r not in td:
                 td[r] = t.copy()
@@ -115,7 +122,7 @@ def conflicts_resolve(db, c):
         LOGGER.info("Deleting conflicts", extra={'tenderid': tid, 'rev': trev, 'MESSAGE_ID': 'conflict_deleting'})
 
 
-def main(couchdb_url=None, couchdb_db='openprocurement', seq_file=None):
+def main(couchdb_url=None, couchdb_db='openprocurement', seq_file=None, dump_dir=None):
     if JournalHandler:
         params = {
             'TAGS': 'python,concord',
@@ -126,6 +133,8 @@ def main(couchdb_url=None, couchdb_db='openprocurement', seq_file=None):
     else:
         server = Server(session=Session(retry_delays=range(10)))
     db = server[couchdb_db]
+    if dump_dir and not os.path.isdir(dump_dir):
+        os.mkdir(dump_dir)
     if seq_file and os.path.isfile(seq_file):
         with open(seq_file) as f:
             fdata = f.read()
@@ -137,8 +146,12 @@ def main(couchdb_url=None, couchdb_db='openprocurement', seq_file=None):
         cc = db.changes(timeout=55000, since=last_seq, feed='longpoll',
                         filter='_view', view='conflicts/all', include_docs=True,
                         conflicts=True)
+        #wait([
+            #spawn(conflicts_resolve, db, c, dump_dir)
+            #for c in cc[u'results']
+        #])
         for c in cc[u'results']:
-            conflicts_resolve(db, c)
+            conflicts_resolve(db, c, dump_dir)
         last_seq = cc[u'last_seq']
         if seq_file and seq_block < last_seq / 100:
             with open(seq_file, 'w+') as f:
