@@ -1,10 +1,10 @@
 import gevent.monkey
 gevent.monkey.patch_all()
 
-import os, logging, couchdb, json
-from couchdb import Server, Session
+import os, logging, json
+from couchdb import Server, Session, ServerError, ResourceConflict
 from datetime import timedelta, datetime
-from jsonpatch import make_patch, apply_patch as _apply_patch
+from jsonpatch import JsonPatchConflict, make_patch, apply_patch as _apply_patch
 from pytz import timezone
 #from gevent import spawn, wait
 
@@ -62,7 +62,9 @@ def conflicts_resolve(db, c, dump_dir=None):
         for r in conflicts:
             try:
                 t = db.get(tid, rev=r)
-            except couchdb.http.ServerError:
+            except ServerError:
+                update_journal_handler_params({'PARAMS': r})
+                LOGGER.error("ServerError on getting revision", extra={'tenderid': tid, 'rev': r, 'MESSAGE_ID': 'conflict_error_get'})
                 return
             if dump_dir:
                 with open('{}@{}.json'.format(os.path.join(dump_dir, tid), r), 'w') as f:
@@ -80,7 +82,11 @@ def conflicts_resolve(db, c, dump_dir=None):
             common_index = [i.get('rev') for i in revs].index(common_rev)
             for rev in revs[common_index:][::-1]:
                 tn = t.copy()
-                t = _apply_patch(t, rev['changes'])
+                try:
+                    t = _apply_patch(t, rev['changes'])
+                except JsonPatchConflict:
+                    LOGGER.error("Can't restore revision", extra={'tenderid': tid, 'rev': trev, 'MESSAGE_ID': 'conflict_error_restore'})
+                    return
                 ti = dict([x for x in t.items() if x[0] not in IGNORE])
                 tj = dict([x for x in tn.items() if x[0] not in IGNORE])
                 tt.append((rev['date'], rev, get_revision_changes(ti, tj)))
@@ -88,7 +94,11 @@ def conflicts_resolve(db, c, dump_dir=None):
                 if i[0] in applied:
                     continue
                 t = ctender.copy()
-                ctender.update(_apply_patch(t, i[2]))
+                try:
+                    ctender.update(_apply_patch(t, i[2]))
+                except JsonPatchConflict:
+                    LOGGER.error("Can't apply patch", extra={'tenderid': tid, 'rev': trev, 'MESSAGE_ID': 'conflict_error_patch'})
+                    return
                 patch = get_revision_changes(ctender, t)
                 revision = i[1]
                 revision['changes'] = patch
@@ -100,9 +110,10 @@ def conflicts_resolve(db, c, dump_dir=None):
         ctender['dateModified'] = get_now().isoformat()
         try:
             tid, trev = db.save(ctender)
-        except couchdb.http.ServerError:
+        except ServerError:
+            LOGGER.error("ServerError on saving resolution", extra={'tenderid': tid, 'rev': trev, 'MESSAGE_ID': 'conflict_error_save'})
             return
-        except couchdb.http.ResourceConflict:
+        except ResourceConflict:
             LOGGER.info("Conflict not resolved", extra={'tenderid': tid, 'rev': trev, 'MESSAGE_ID': 'conflict_not_resolved'})
             return
         else:
@@ -115,7 +126,8 @@ def conflicts_resolve(db, c, dump_dir=None):
         uu.append({'_id': tid, '_rev': r, '_deleted': True})
     try:
         results = db.update(uu)
-    except couchdb.http.ServerError:
+    except ServerError:
+        LOGGER.error("ServerError on deleting conflicts", extra={'tenderid': tid, 'rev': trev, 'MESSAGE_ID': 'conflict_error_deleting'})
         return
     else:
         update_journal_handler_params({'TENDER_REV': trev, 'RESULT': ','.join([str(x[0]) for x in results])})
