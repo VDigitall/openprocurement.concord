@@ -6,6 +6,7 @@ from datetime import timedelta
 
 from openprocurement.api.models import get_now
 from openprocurement.api.utils import get_revision_changes
+from openprocurement.api.tests.base import test_organization
 from openprocurement.concord.tests.base import BaseTenderWebTest
 from openprocurement.concord.daemon import conflicts_resolve as resolve
 from jsonpatch import make_patch, apply_patch as _apply_patch
@@ -82,7 +83,7 @@ class TenderConflictsTest(BaseTenderWebTest):
         self.assertEqual(response.status, '200 OK')
         tender = response.json['data']
 
-        response = self.app2.post_json('/tenders/{}/bids'.format(self.tender_id), {'data': {'tenderers': [tender["procuringEntity"]], "value": {"amount": 401}}}, status=403)
+        response = self.app2.post_json('/tenders/{}/bids'.format(self.tender_id), {'data': {'tenderers': [test_organization], "value": {"amount": 401}}}, status=403)
         self.assertEqual(response.status, '403 Forbidden')
         self.assertEqual(response.content_type, 'application/json')
         self.assertEqual(response.json['errors'][0]["description"], "Can't add bid in current (active.enquiries) tender status")
@@ -90,7 +91,7 @@ class TenderConflictsTest(BaseTenderWebTest):
         self.couchdb_server.replicate(self.db.name, self.db2.name)
         self.couchdb_server.replicate(self.db2.name, self.db.name)
 
-        response = self.app2.post_json('/tenders/{}/bids'.format(self.tender_id), {'data': {'tenderers': [tender["procuringEntity"]], "value": {"amount": 401}}})
+        response = self.app2.post_json('/tenders/{}/bids'.format(self.tender_id), {'data': {'tenderers': [test_organization], "value": {"amount": 401}}})
         self.assertEqual(response.status, '201 Created')
         bid_id = response.json['data']['id']
 
@@ -102,12 +103,13 @@ class TenderConflictsTest(BaseTenderWebTest):
         self.assertEqual(tender['bids'][0]["id"], bid_id)
         self.assertEqual(tender['bids'][0]["value"]["amount"], 401)
 
+    @unittest.skip("wait for bids")
     def test_conflict_insdel12(self):
         response = self.app.get('/tenders/{}'.format(self.tender_id))
         self.assertEqual(response.status, '200 OK')
         tender = response.json['data']
         self.set_status('active.tendering')
-        response = self.app.post_json('/tenders/{}/bids'.format(self.tender_id), {'data': {'tenderers': [tender["procuringEntity"]], "value": {"amount": 401}}})
+        response = self.app.post_json('/tenders/{}/bids'.format(self.tender_id), {'data': {'tenderers': [test_organization], "value": {"amount": 401}}})
         self.assertEqual(response.status, '201 Created')
         bid_id_to_del = response.json['data']['id']
         self.couchdb_server.replicate(self.db.name, self.db2.name)
@@ -116,7 +118,7 @@ class TenderConflictsTest(BaseTenderWebTest):
         response = self.app.delete('/tenders/{}/bids/{}'.format(self.tender_id, bid_id_to_del))
         self.assertEqual(response.status, '200 OK')
 
-        response = self.app2.post_json('/tenders/{}/bids'.format(self.tender_id), {'data': {'tenderers': [tender["procuringEntity"]], "value": {"amount": 402}}})
+        response = self.app2.post_json('/tenders/{}/bids'.format(self.tender_id), {'data': {'tenderers': [test_organization], "value": {"amount": 402}}})
         self.assertEqual(response.status, '201 Created')
         bid_id = response.json['data']['id']
 
@@ -133,18 +135,19 @@ class TenderConflictsTest(BaseTenderWebTest):
         self.assertEqual(tender['bids'][0]["id"], bid_id)
         self.assertEqual(tender['bids'][0]["value"]["amount"], 402)
 
+    @unittest.skip("wait for bids")
     def test_conflict_insdel21(self):
         response = self.app.get('/tenders/{}'.format(self.tender_id))
         self.assertEqual(response.status, '200 OK')
         tender = response.json['data']
         self.set_status('active.tendering')
-        response = self.app.post_json('/tenders/{}/bids'.format(self.tender_id), {'data': {'tenderers': [tender["procuringEntity"]], "value": {"amount": 401}}})
+        response = self.app.post_json('/tenders/{}/bids'.format(self.tender_id), {'data': {'tenderers': [test_organization], "value": {"amount": 401}}})
         self.assertEqual(response.status, '201 Created')
         bid_id_to_del = response.json['data']['id']
         self.couchdb_server.replicate(self.db.name, self.db2.name)
         self.couchdb_server.replicate(self.db2.name, self.db.name)
 
-        response = self.app.post_json('/tenders/{}/bids'.format(self.tender_id), {'data': {'tenderers': [tender["procuringEntity"]], "value": {"amount": 402}}})
+        response = self.app.post_json('/tenders/{}/bids'.format(self.tender_id), {'data': {'tenderers': [test_organization], "value": {"amount": 402}}})
         self.assertEqual(response.status, '201 Created')
         bid_id = response.json['data']['id']
 
@@ -172,11 +175,11 @@ class TenderConflictsTest(BaseTenderWebTest):
         self.assertEqual(response.status, '200 OK')
         tender = response.json['data']
 
-        response = self.app2.post_json('/tenders/{}/bids'.format(self.tender_id), {'data': {'tenderers': [tender["procuringEntity"]], "value": {"amount": 401}}})
+        response = self.app2.post_json('/tenders/{}/bids'.format(self.tender_id), {'data': {'tenderers': [test_organization], "value": {"amount": 401}}})
         self.assertEqual(response.status, '201 Created')
         bid_id = response.json['data']['id']
 
-        response = self.app.post_json('/tenders/{}/bids'.format(self.tender_id), {'data': {'tenderers': [tender["procuringEntity"]], "value": {"amount": 402}}})
+        response = self.app.post_json('/tenders/{}/bids'.format(self.tender_id), {'data': {'tenderers': [test_organization], "value": {"amount": 402}}})
         self.assertEqual(response.status, '201 Created')
         response = self.app.delete('/tenders/{}/bids/{}'.format(self.tender_id, response.json['data']['id']))
         self.assertEqual(response.status, '200 OK')
@@ -202,11 +205,11 @@ class TenderConflictsTest(BaseTenderWebTest):
         self.assertEqual(response.status, '200 OK')
         tender = response.json['data']
 
-        response = self.app.post_json('/tenders/{}/bids'.format(self.tender_id), {'data': {'tenderers': [tender["procuringEntity"]], "value": {"amount": 402}}})
+        response = self.app.post_json('/tenders/{}/bids'.format(self.tender_id), {'data': {'tenderers': [test_organization], "value": {"amount": 402}}})
         self.assertEqual(response.status, '201 Created')
         bid_id_to_del = response.json['data']['id']
 
-        response = self.app2.post_json('/tenders/{}/bids'.format(self.tender_id), {'data': {'tenderers': [tender["procuringEntity"]], "value": {"amount": 401}}})
+        response = self.app2.post_json('/tenders/{}/bids'.format(self.tender_id), {'data': {'tenderers': [test_organization], "value": {"amount": 401}}})
         self.assertEqual(response.status, '201 Created')
         bid_id = response.json['data']['id']
 
@@ -234,12 +237,12 @@ class TenderConflictsTest(BaseTenderWebTest):
         self.assertEqual(response.status, '200 OK')
         tender = response.json['data']
 
-        response = self.app.post_json('/tenders/{}/bids'.format(self.tender_id), {'data': {'tenderers': [tender["procuringEntity"]], "value": {"amount": 402}}})
+        response = self.app.post_json('/tenders/{}/bids'.format(self.tender_id), {'data': {'tenderers': [test_organization], "value": {"amount": 402}}})
         self.assertEqual(response.status, '201 Created')
         response = self.app.delete('/tenders/{}/bids/{}'.format(self.tender_id, response.json['data']['id']))
         self.assertEqual(response.status, '200 OK')
 
-        response = self.app2.post_json('/tenders/{}/bids'.format(self.tender_id), {'data': {'tenderers': [tender["procuringEntity"]], "value": {"amount": 401}}})
+        response = self.app2.post_json('/tenders/{}/bids'.format(self.tender_id), {'data': {'tenderers': [test_organization], "value": {"amount": 401}}})
         self.assertEqual(response.status, '201 Created')
         bid_id = response.json['data']['id']
 
