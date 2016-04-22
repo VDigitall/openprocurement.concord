@@ -8,6 +8,7 @@ from jsonpointer import JsonPointerException
 from jsonpatch import JsonPatchConflict, make_patch, apply_patch as _apply_patch
 from pytz import timezone
 #from gevent import spawn, wait
+from gevent import sleep
 
 try:
     from systemd.journal import JournalHandler
@@ -92,6 +93,8 @@ def conflicts_resolve(db, c, dump_dir=None):
             revs = t['revisions']
             #common_index = [i.get('rev') for i in revs].index(common_rev)
             for rev in revs[common_index:][::-1]:
+                if 'changes' not in rev:
+                    continue
                 tn = t.copy()
                 try:
                     t = _apply_patch(t, rev['changes'])
@@ -113,10 +116,11 @@ def conflicts_resolve(db, c, dump_dir=None):
                     LOGGER.error("Can't apply patch", extra={'tenderid': tid, 'rev': trev, 'MESSAGE_ID': 'conflict_error_patch'})
                     return
                 patch = get_revision_changes(ctender, t)
-                revision = i[1]
-                revision['changes'] = patch
-                revision['rev'] = common_rev
-                ctender['revisions'].append(revision)
+                if patch:
+                    revision = i[1]
+                    revision['changes'] = patch
+                    revision['rev'] = common_rev
+                    ctender['revisions'].append(revision)
                 applied.append(i[0])
                 changed = True
     if changed:
@@ -157,7 +161,15 @@ def main(couchdb_url=None, couchdb_db='openprocurement', seq_file=None, dump_dir
         server = Server(url=couchdb_url, session=Session(retry_delays=range(10)))
     else:
         server = Server(session=Session(retry_delays=range(10)))
-    db = server[couchdb_db]
+    for i in range(10):
+        try:
+            db = server[couchdb_db]
+        except:
+            sleep(i)
+        else:
+            break
+    else:
+        db = server[couchdb_db]
     if dump_dir and not os.path.isdir(dump_dir):
         os.mkdir(dump_dir)
     if seq_file and os.path.isfile(seq_file):
