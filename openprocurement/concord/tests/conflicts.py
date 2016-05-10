@@ -41,6 +41,30 @@ class TenderConflictsTest(BaseTenderWebTest):
             }})
             self.assertEqual(response.status, '200 OK')
 
+    def test_conflict_draft(self):
+        data = self.initial_data.copy()
+        data['status'] = 'draft'
+        response = self.app.post_json('/tenders', {'data': data})
+        tender = response.json['data']
+        self.assertEqual(tender['status'], 'draft')
+        tender_id = tender['id']
+        self.couchdb_server.replicate(self.db.name, self.db2.name)
+        self.couchdb_server.replicate(self.db2.name, self.db.name)
+        response = self.app.patch_json('/tenders/{}'.format(tender_id), {'data': {'status': 'active.enquiries'}})
+        self.assertEqual(response.status, '200 OK')
+        self.assertEqual(response.json['data']['status'], 'active.enquiries')
+        response = self.app2.patch_json('/tenders/{}'.format(tender_id), {'data': {'status': 'active.enquiries'}})
+        self.assertEqual(response.status, '200 OK')
+        self.assertEqual(response.json['data']['status'], 'active.enquiries')
+        self.couchdb_server.replicate(self.db.name, self.db2.name)
+        self.couchdb_server.replicate(self.db2.name, self.db.name)
+        self.assertGreater(len(self.db.view('conflicts/all')), 0)
+        conflicts_resolve(self.db)
+        self.assertEqual(len(self.db.view('conflicts/all')), 0)
+        self.couchdb_server.replicate(self.db.name, self.db2.name)
+        self.couchdb_server.replicate(self.db2.name, self.db.name)
+        self.assertEqual(len(self.db.view('conflicts/all')), 0)
+
     def test_conflict_tenderID(self):
         self.db2.save({'_id': 'tenderID'})
         self.couchdb_server.replicate(self.db.name, self.db2.name)
