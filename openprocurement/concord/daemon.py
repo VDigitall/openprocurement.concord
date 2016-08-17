@@ -84,7 +84,11 @@ def conflicts_resolve(db, c, dump_dir=None):
                 td[r] = t.copy()
         #common_rev = [i[0] for i in zip(*open_revs.values()) if all(map(lambda x: i[0]==x, i))][-1]
         common_chain = [i[0] for i in zip(*open_revs.values()) if all(map(lambda x: i[0]==x, i))]
-        common_rev = common_chain[-1][0]
+        try:
+            common_rev = common_chain[-1][0]
+        except IndexError:
+            LOGGER.error("Can't find common revision", extra={'tenderid': tid, 'rev': trev, 'MESSAGE_ID': 'conflict_error_common'})
+            return
         common_index = len(common_chain)
         applied = [rev['date'] for rev in ctender['revisions'][common_index:]]
         for r in conflicts:
@@ -111,7 +115,8 @@ def conflicts_resolve(db, c, dump_dir=None):
                 try:
                     ctender.update(_apply_patch(t, i[2]))
                 except JsonPointerException:
-                    raise
+                    LOGGER.error("Can't apply patch", extra={'tenderid': tid, 'rev': trev, 'MESSAGE_ID': 'conflict_error_pointer'})
+                    return
                 except JsonPatchConflict:
                     LOGGER.error("Can't apply patch", extra={'tenderid': tid, 'rev': trev, 'MESSAGE_ID': 'conflict_error_patch'})
                     return
