@@ -1,5 +1,6 @@
-import gevent.monkey
-gevent.monkey.patch_all()
+if 'test' not in __import__('sys').argv[0]:
+    import gevent.monkey
+    gevent.monkey.patch_all()
 
 import os, logging, json
 from couchdb import Server, Session, ServerError, ResourceConflict
@@ -24,10 +25,6 @@ TZ = timezone(os.environ['TZ'] if 'TZ' in os.environ else 'Europe/Kiev')
 
 def get_now():
     return datetime.now(TZ)
-
-
-def sort_key(rev):
-    return rev and (int(rev.split('-')[0]), rev.split('-')[1])
 
 
 def get_revision_changes(dst, src):
@@ -63,8 +60,6 @@ def conflicts_resolve(db, c, dump_dir=None):
     LOGGER.info("Conflict detected", extra={'tenderid': tid, 'rev': trev, 'MESSAGE_ID': 'conflict_detected'})
     if 'revisions' in ctender:
         open_revs = dict([(i, None) for i in conflicts])
-        #open_revs[trev] = sorted(set([i.get('rev') for i in ctender['revisions']]), key=sort_key)
-        #open_revs[trev] = [i.get('rev') for i in ctender['revisions']]
         open_revs[trev] = [(i.get('rev'), i['date']) for i in ctender['revisions']]
         td = {trev: ctender}
         for r in conflicts:
@@ -77,12 +72,9 @@ def conflicts_resolve(db, c, dump_dir=None):
             if dump_dir:
                 with open('{}@{}.json'.format(os.path.join(dump_dir, tid), r), 'w') as f:
                     json.dump(t, f)
-            #open_revs[r] = sorted(set([i.get('rev') for i in t['revisions']]), key=sort_key)
-            #open_revs[r] = [i.get('rev') for i in t['revisions']]
             open_revs[r] = [(i.get('rev'), i['date']) for i in t['revisions']]
             if r not in td:
                 td[r] = t.copy()
-        #common_rev = [i[0] for i in zip(*open_revs.values()) if all(map(lambda x: i[0]==x, i))][-1]
         common_chain = [i[0] for i in zip(*open_revs.values()) if all(map(lambda x: i[0]==x, i))]
         try:
             common_rev = common_chain[-1][0]
@@ -95,7 +87,6 @@ def conflicts_resolve(db, c, dump_dir=None):
             tt = []
             t = td[r]
             revs = t['revisions']
-            #common_index = [i.get('rev') for i in revs].index(common_rev)
             for rev in revs[common_index:][::-1]:
                 if 'changes' not in rev:
                     continue
@@ -113,7 +104,7 @@ def conflicts_resolve(db, c, dump_dir=None):
                     continue
                 t = ctender.copy()
                 try:
-                    ctender.update(_apply_patch(t, i[2]))
+                    ctender = _apply_patch(t, i[2])
                 except JsonPointerException:
                     LOGGER.error("Can't apply patch", extra={'tenderid': tid, 'rev': trev, 'MESSAGE_ID': 'conflict_error_pointer'})
                     return
