@@ -12,14 +12,16 @@ from openprocurement.concord.daemon import conflicts_resolve as resolve
 from jsonpatch import make_patch, apply_patch as _apply_patch
 #from json_tools import diff, patch as _patch
 from iso8601 import parse_date
+from mock import MagicMock
 
 IGNORE = ['_attachments', '_revisions', 'revisions', 'dateModified', "_id", "_rev", "doc_type"]
 
 
 def conflicts_resolve(db):
     """ Branch apply algorithm """
+    metrics = MagicMock()
     for c in db.view('conflicts/all', include_docs=True, conflicts=True):
-        resolve(db, c)
+        resolve(db, c, metrics)
 
 
 class TenderConflictsTest(BaseTenderWebTest):

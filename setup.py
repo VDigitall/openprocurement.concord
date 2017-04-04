@@ -12,11 +12,13 @@ requires = [
     'jsonpatch',
     'pytz',
     'gevent',
+    'kadabra'
 ]
 test_requires = requires + [
     'webtest',
     'python-coveralls',
     'openprocurement.api',
+    'mock'
 ]
 
 entry_points = """\
